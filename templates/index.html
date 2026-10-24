@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>場所情報検索マップ</title>
+    <style>
+        :root { font-family: system-ui, "Yu Gothic UI", sans-serif; color: #25324a; background: #f5f7fa; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 22px; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px #00000012; }
+        h1, h2 { color: #1e3a8a; }
+        h1 { text-align: center; margin: 0 0 20px; }
+        #map { width: 100%; height: 500px; border-radius: 8px; margin-bottom: 20px; background: #e8edf5; }
+        #map-message, #search-status { padding: 10px 0; }
+        #location-info[hidden] { display: none; }
+        .search-box { display: flex; gap: 10px; margin: 18px 0; }
+        .search-box input { min-width: 0; flex: 1; padding: 11px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; }
+        button { padding: 11px 18px; background: #2563eb; color: white; border: 0; border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .accordion { display: block; width: 100%; margin: 0; border-radius: 0; border-bottom: 1px solid #ffffff55; text-align: left; background: #1e40af; }
+        .accordion:first-of-type { border-radius: 6px 6px 0 0; }
+        .accordion:last-of-type { border-radius: 0 0 6px 6px; }
+        .panel { display: none; padding: 14px 16px; border: 1px solid #cbd5e1; border-top: 0; }
+        .panel.open { display: block; }
+        #search-results { padding-left: 22px; }
+        #search-results li { margin: 8px 0; overflow-wrap: anywhere; }
+        @media (max-width: 600px) { body { padding: 10px; } .container { padding: 14px; } #map { height: 380px; } .search-box { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>場所情報検索マップ</h1>
+    {% if api_key %}
+    <div id="map" aria-label="登録地点を示す地図"></div>
+    <p id="map-message" role="status"></p>
+    {% else %}
+    <p id="map-message" role="alert">地図を表示するには、環境変数 GOOGLE_MAPS_API_KEY を設定してください。</p>
+    {% endif %}
+
+    <section id="location-info" hidden>
+        <h2 id="location-name"></h2>
+        <p><a id="official-link" target="_blank" rel="noopener noreferrer">公式サイトを開く</a></p>
+        <div class="search-box">
+            <input type="search" id="search-input" maxlength="100" placeholder="登録サイトのリンクをキーワード検索" aria-label="検索キーワード">
+            <button type="button" id="search-button">検索</button>
+        </div>
+        <p id="search-status" role="status"></p>
+        <ul id="search-results"></ul>
+        <button type="button" class="accordion" aria-expanded="false">営業時間・開催情報</button>
+        <div class="panel" id="panel-schedule"></div>
+        <button type="button" class="accordion" aria-expanded="false">案内</button>
+        <div class="panel" id="panel-description"></div>
+        <button type="button" class="accordion" aria-expanded="false">特徴</button>
+        <div class="panel" id="panel-features"></div>
+    </section>
+</div>
+
+<script>
+const locationData = {{ locations | tojson }};
+let selectedLocation = null;
+
+function showLocation(location) {
+    selectedLocation = location;
+    document.getElementById('location-name').textContent = location.name;
+    const officialLink = document.getElementById('official-link');
+    officialLink.href = location.url;
+    document.getElementById('panel-schedule').textContent = location.schedule;
+    document.getElementById('panel-description').textContent = location.description;
+    document.getElementById('panel-features').textContent = location.features;
+    document.getElementById('location-info').hidden = false;
+    document.getElementById('search-status').textContent = '';
+    document.getElementById('search-results').replaceChildren();
+    document.getElementById('location-info').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('.accordion').forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-expanded', 'false');
+        button.nextElementSibling.classList.remove('open');
+    });
+}
+
+async function searchLocation() {
+    if (!selectedLocation) return;
+    const keyword = document.getElementById('search-input').value.trim();
+    const status = document.getElementById('search-status');
+    const resultList = document.getElementById('search-results');
+    resultList.replaceChildren();
+    if (!keyword) {
+        status.textContent = 'キーワードを入力してください。';
+        return;
+    }
+    status.textContent = '検索中…';
+    try {
+        const query = new URLSearchParams({ location_id: String(selectedLocation.id), keyword });
+        const response = await fetch('/api/search?' + query.toString());
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '検索に失敗しました。');
+        if (!data.results.length) {
+            status.textContent = '一致するリンクが見つかりませんでした。';
+            return;
+        }
+        data.results.forEach(result => {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.textContent = result.title || result.url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            item.appendChild(link);
+            resultList.appendChild(item);
+        });
+        status.textContent = '検索結果: ' + data.results.length + '件';
+    } catch (error) {
+        status.textContent = error.message || '検索に失敗しました。';
+    }
+}
+
+document.getElementById('search-button').addEventListener('click', searchLocation);
+document.getElementById('search-input').addEventListener('keydown', event => {
+    if (event.key === 'Enter') searchLocation();
+});
+document.querySelectorAll('.accordion').forEach(button => {
+    button.addEventListener('click', () => {
+        const panel = button.nextElementSibling;
+        const open = !panel.classList.contains('open');
+        panel.classList.toggle('open', open);
+        button.classList.toggle('active', open);
+        button.setAttribute('aria-expanded', String(open));
+    });
+});
+
+{% if api_key %}
+function initMap() {
+    const map = new google.maps.Map(document.getElementById('map'), { center: { lat: 35.68, lng: 139.76 }, zoom: 11 });
+    const bounds = new google.maps.LatLngBounds();
+    locationData.forEach(location => {
+        const position = { lat: Number(location.lat), lng: Number(location.lng) };
+        const marker = new google.maps.Marker({ position, map, title: location.name });
+        bounds.extend(position);
+        marker.addListener('click', () => showLocation(location));
+    });
+    if (locationData.length) map.fitBounds(bounds);
+}
+{% endif %}
+</script>
+{% if api_key %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap" async defer></script>
+{% endif %}
+</body>
+</html>

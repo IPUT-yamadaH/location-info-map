@@ -1,0 +1,63 @@
+# 場所情報検索マップ
+
+登録した地点をGoogle Maps上に表示し、地点を選んで公式サイトや案内を確認できるFlaskアプリです。各地点の登録サイトにあるリンクをキーワードで絞り込めます。サンプル地点は `app.py` の `LOCATIONS` に登録してあり、施設・店舗・観光地など利用目的に合わせて追加・変更できます。
+
+## 機能
+
+- 登録地点の位置をGoogle Maps上にピン表示
+- ピンを選ぶと名称、登録サイト、案内を表示
+- 登録サイトのトップページにあるリンクをキーワード検索（最大5件）
+- 営業時間・開催情報、案内、特徴を表示
+
+## 必要なもの
+
+- Python 3.10以上
+- Google Maps JavaScript APIキー（Maps JavaScript APIを有効にしたGoogle Cloudプロジェクト）
+
+Google Maps APIキーはブラウザーに配信されるため、完全な秘密情報にはできません。Google Cloud側でHTTPリファラー制限を設定し、Maps JavaScript APIだけに利用を制限してください。ソースコードに実際のキーを直接書かず、ローカルの `.env` で設定します。
+
+## 起動方法（Windows PowerShell）
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` を開き、`GOOGLE_MAPS_API_KEY` に自分の制限済みキーを設定します。その後、プロジェクトフォルダで以下を実行します。
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python app.py
+```
+
+ブラウザーで <http://127.0.0.1:5000> を開きます。Google Mapsキー未設定時は地図を読み込まず、設定が必要なことを画面に表示します。
+
+## 地点の追加・変更
+
+`app.py` の `LOCATIONS` に、次の形式で項目を追加します。`id` は重複しない値、URLはその地点を案内するサイト、緯度・経度は地図に表示する座標にしてください。
+
+```python
+{
+    "id": 4,
+    "name": "地点名",
+    "lat": 35.000000,
+    "lng": 139.000000,
+    "url": "https://www.example.com/",
+    "schedule": "営業時間・開催情報",
+    "description": "案内文",
+    "features": "特徴",
+}
+```
+
+サンプルには東京タワー、東京駅、新宿御苑を登録しています。検索対象は登録したURLだけです。検索機能は登録サイトのトップページにあるリンクを調べるもので、サイト全体の本文検索ではありません。サイト構造やアクセス制限によって結果が見つからないことがあります。
+
+## GitHubへのアップロード
+
+リポジトリのルートに `app.py`、`crawler.py`、`requirements.txt`、`.env.example`、`.gitignore`、`README.md` と `templates/index.html` をアップロードしてください。`.env` はAPIキーを含むためアップロードしません。`.gitignore` で除外されます。
+
+## 注意
+
+- サンプル地点の情報・座標は利用前に公式サイト等で確認してください。
+- クローラーは登録したURLのトップページだけを確認し、短いタイムアウトと結果件数制限を設けています。各サイトの利用条件・アクセス方針を守ってください。
+- APIキーをHTMLで使用するため、ブラウザーの開発者ツールから利用中のキーは確認できます。Google Cloudでリファラー制限とAPI制限を設定し、貼り付けて共有してしまった古いキーは無効化または再発行してください。
